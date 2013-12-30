@@ -16,7 +16,14 @@ public class ImageResourceLoader {
 		ClassLoader classLoader = c.getClassLoader();
 		URL url=classLoader.getResource(name);
 		
-		System.out.println(url.toString());
+    // If the file is not in the jar, get it straight from file
+		if (url == null) {
+			try {
+				url = new java.io.File("src/main/resources/"+name).toURI().toURL();
+			} catch (java.io.IOException e) {
+				e.printStackTrace();
+			}		
+		}
 		
 		ImageIcon icon=new ImageIcon(url);
 		
