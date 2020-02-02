@@ -4,9 +4,7 @@
 /build
 /.gradle
 /.idea
-/sample
 
 # Package Files #
-*.jar
 *.war
 *.ear
