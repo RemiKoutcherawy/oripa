@@ -1,0 +1,36 @@
+Memo
+Tried to compile with Maven and Pom.xml failed
+From https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project
+and http://maven.apache.org/general.html#importing-jars
+mvn install:install-file \
+   -Dfile=<path-to-file> \
+   -DgroupId=<group-id> \
+   -DartifactId=<artifact-id> \
+   -Dversion=<version> \
+   -Dpackaging=<packaging> \
+   -DgeneratePom=true
+ 
+ Download jar (1.3.1) from https://repo.maven.apache.org/maven2/java3d/ into oripa/java3d
+ open a shell cd into oripa and run
+ mvn install:install-file -Dfile=java3d/j3d-core-1.3.1.jar -DgroupId=java3d -DartifactId=vecmath -Dversion=1.5.2 -Dpackaging=jar -DgeneratePom=true
+ Fail....
+ 
+https://www.oracle.com/technetwork/java/javase/tech/java3d-137523.html
+Edit pom.xml add into <profile>
+ <repositories>
+    <repository>
+        <id>local-maven-repo</id>
+        <url>file:///${project.parent.basedir}/local-maven-repo</url>
+    </repository>
+</repositories>
+Command Line :
+mvn org.apache.maven.plugins:maven-install-plugin:2.5.2:install-file \
+    -Dfile=java3d/j3d-core-1.3.1.jar \
+    -DgroupId=java3d \
+    -DartifactId=vecmath \
+    -Dversion=1.3.1 \
+    -Dpackaging=jar \
+    -DlocalRepositoryPath=${master_project}/local-maven-repo
+The specified file 'C:\Users\remik\git\oripa\~\git\oripa\java3d\j3d-core-1.3.1.jar' not exists -> [Help 1]
+[ERROR]
+Installing C:\Users\remik\git\oripa\java3d\j3d-core-1.3.1.jar to C:\Program Files\Git\local-maven-repo\java3d\vecmath\1.3.1\vecmath-1.3.1.jar

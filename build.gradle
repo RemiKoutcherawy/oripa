@@ -8,8 +8,8 @@ jar {
 		attributes 'Main-Class' : 'oripa.ORIPA'
 	}
 }
-
-repositories { mavenCentral() }
+compileJava.options.encoding = 'UTF-8'
+compileTestJava.options.encoding = 'UTF-8'
 
 dependencies {
 	//    compile group: 'commons-collections', name: 'commons-collections', version
