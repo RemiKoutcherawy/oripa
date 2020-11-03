@@ -20,311 +20,292 @@ package oripa.view.estimation;
 import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.event.ItemEvent;
-import java.io.File;
-import java.util.List;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
 import oripa.ORIPA;
-import oripa.doc.Doc;
-import oripa.doc.exporter.Exporter;
-import oripa.doc.exporter.ExporterORmat;
-import oripa.doc.exporter.ExporterSVG;
-import oripa.file.FileFilterEx;
-import oripa.fold.FoldedModelInfo;
+import oripa.domain.fold.FoldedModelInfo;
+import oripa.domain.fold.OrigamiModel;
+import oripa.persistent.doc.Doc;
+import oripa.persistent.doc.DocDAO;
+import oripa.persistent.doc.FileTypeKey;
+import oripa.persistent.doc.SavingDocAction;
+import oripa.persistent.doc.exporter.ExporterORmat;
+import oripa.persistent.doc.exporter.ExporterSVGFactory;
+import oripa.persistent.filetool.FileAccessSupportFilter;
+import oripa.persistent.filetool.FileChooserCanceledException;
 
 public class EstimationResultUI extends JPanel {
 
-    private static final long serialVersionUID = 1L;
-    private JButton jButtonNextAnswer = null;
-    private JButton jButtonPrevAnswer = null;
-    private JCheckBox jCheckBoxOrder = null;
-    private JCheckBox jCheckBoxShadow = null;
-    private JLabel jLabel = null;
-    private FoldedModelScreen screen;
-    private JCheckBox jCheckBoxUseColor = null;
-    private JCheckBox jCheckBoxEdge = null;
-    private JCheckBox jCheckBoxFillFace = null;
-    private JButton jButtonExport = null;
+	private static final long serialVersionUID = 1L;
+	private JButton jButtonNextAnswer = null;
+	private JButton jButtonPrevAnswer = null;
+	private JCheckBox jCheckBoxOrder = null;
+	private JCheckBox jCheckBoxShadow = null;
+	private JLabel jLabel = null;
+	private FoldedModelScreen screen;
+	private JCheckBox jCheckBoxUseColor = null;
+	private JCheckBox jCheckBoxEdge = null;
+	private JCheckBox jCheckBoxFillFace = null;
+	private JButton jButtonExport = null;
 
-    /**
-     * This is the default constructor
-     */
-    public EstimationResultUI() {
-        super();
-        initialize();
-    }
+	/**
+	 * This is the default constructor
+	 */
+	public EstimationResultUI() {
+		super();
+		initialize();
+	}
 
-    public void setScreen(FoldedModelScreen s) {
-        screen = s;
-    }
+	public void setScreen(final FoldedModelScreen s) {
+		screen = s;
+	}
 
-    /**
-     * This method initializes this
-     *
-     * @return void
-     */
-    private void initialize() {
-        jLabel = new JLabel();
-        jLabel.setBounds(new Rectangle(15, 45, 181, 16));
-        this.setLayout(null);
-        this.setSize(216, 256);
-        this.setPreferredSize(new Dimension(216, 200));
-        this.add(getJButtonPrevAnswer(), null);
-        this.add(getJCheckBoxOrder(), null);
-        this.add(getJButtonNextAnswer(), null);
-        this.add(getJCheckBoxShadow(), null);
-        this.add(jLabel, null);
-        this.add(getJCheckBoxUseColor(), null);
-        this.add(getJCheckBoxEdge(), null);
-        this.add(getJCheckBoxFillFace(), null);
-        this.add(getJButtonExport(), null);
-        updateLabel();
-    }
+	/**
+	 * This method initializes this
+	 *
+	 * @return void
+	 */
+	private void initialize() {
+		jLabel = new JLabel();
+		jLabel.setBounds(new Rectangle(15, 45, 181, 16));
+		this.setLayout(null);
+		this.setSize(216, 256);
+		this.setPreferredSize(new Dimension(216, 200));
+		this.add(getJButtonPrevAnswer(), null);
+		this.add(getJCheckBoxOrder(), null);
+		this.add(getJButtonNextAnswer(), null);
+		this.add(getJCheckBoxShadow(), null);
+		this.add(jLabel, null);
+		this.add(getJCheckBoxUseColor(), null);
+		this.add(getJCheckBoxEdge(), null);
+		this.add(getJCheckBoxFillFace(), null);
+		this.add(getJButtonExport(), null);
+		updateLabel();
+	}
 
-    public void updateLabel() {
-    	Doc document = ORIPA.doc;
-    	FoldedModelInfo foldedModelInfo = document.getFoldedModelInfo();
-    	
-		List<int[][]> foldableOverlapRelations = foldedModelInfo.getFoldableOverlapRelations();
+	private FoldedModelInfo foldedModelInfo = null;
+	private OrigamiModel origamiModel = null;
 
-        jLabel.setText("Folded model [" + (foldedModelInfo.getCurrentORmatIndex() + 1) + "/"
-                + foldableOverlapRelations.size() + "]");
+	/**
+	 * @param foldedModelInfo
+	 *            Sets foldedModelInfo
+	 */
+	public void setModel(final OrigamiModel aOrigamiModel,
+			final FoldedModelInfo aFoldedModelInfo) {
+		foldedModelInfo = aFoldedModelInfo;
+		origamiModel = aOrigamiModel;
+	}
 
-    }
+	public void updateLabel() {
 
-    /**
-     * This method initializes jButtonNextAnswer
-     *
-     * @return javax.swing.JButton
-     */
-    private JButton getJButtonNextAnswer() {
+		if (foldedModelInfo == null) {
+			return;
+		}
+		// List<int[][]> foldableOverlapRelations =
+		// foldedModelInfo.getFoldableOverlapRelations();
 
-    	if (jButtonNextAnswer == null) {
-            jButtonNextAnswer = new JButton();
-            jButtonNextAnswer.setText("Next");
-            jButtonNextAnswer.setBounds(new Rectangle(109, 4, 87, 27));
+		jLabel.setText("Folded model ["
+				+ (foldedModelInfo.getCurrentORmatIndex() + 1) + "/"
+				+ foldedModelInfo.getFoldablePatternCount() + "]");
 
-            jButtonNextAnswer.addActionListener(new java.awt.event.ActionListener() {
+	}
 
-                @Override
-                public void actionPerformed(java.awt.event.ActionEvent e) {
-                	Doc document = ORIPA.doc;
-                	FoldedModelInfo foldedModelInfo = document.getFoldedModelInfo();
-                    foldedModelInfo.setNextORMat();
-                    screen.redrawOrigami();
-                    updateLabel();
-                }
-            });
-        }
-        return jButtonNextAnswer;
-    }
+	/**
+	 * This method initializes jButtonNextAnswer
+	 *
+	 * @return javax.swing.JButton
+	 */
+	private JButton getJButtonNextAnswer() {
 
-    /**
-     * This method initializes jButtonPrevAnswer
-     *
-     * @return javax.swing.JButton
-     */
-    private JButton getJButtonPrevAnswer() {
-        if (jButtonPrevAnswer == null) {
-            jButtonPrevAnswer = new JButton();
-            jButtonPrevAnswer.setText("Prev");
-            jButtonPrevAnswer.setBounds(new Rectangle(15, 4, 89, 27));
+		if (jButtonNextAnswer == null) {
+			jButtonNextAnswer = new JButton();
+			jButtonNextAnswer.setText("Next");
+			jButtonNextAnswer.setBounds(new Rectangle(109, 4, 87, 27));
 
-            jButtonPrevAnswer.addActionListener(new java.awt.event.ActionListener() {
+			jButtonNextAnswer
+					.addActionListener(e -> {
+						foldedModelInfo.setNextORMat();
+						screen.redrawOrigami();
+						updateLabel();
+					});
+		}
+		return jButtonNextAnswer;
+	}
 
-                @Override
-                public void actionPerformed(java.awt.event.ActionEvent e) {
-                	Doc document = ORIPA.doc;
-                	FoldedModelInfo foldedModelInfo = document.getFoldedModelInfo();
-                	
-                	foldedModelInfo.setPrevORMat();
-                    screen.redrawOrigami();
-                    updateLabel();
-                }
-            });
-        }
-        return jButtonPrevAnswer;
-    }
+	/**
+	 * This method initializes jButtonPrevAnswer
+	 *
+	 * @return javax.swing.JButton
+	 */
+	private JButton getJButtonPrevAnswer() {
+		if (jButtonPrevAnswer == null) {
+			jButtonPrevAnswer = new JButton();
+			jButtonPrevAnswer.setText("Prev");
+			jButtonPrevAnswer.setBounds(new Rectangle(15, 4, 89, 27));
 
-    /**
-     * This method initializes jCheckBoxOrder
-     *
-     * @return javax.swing.JCheckBox
-     */
-    private JCheckBox getJCheckBoxOrder() {
-        if (jCheckBoxOrder == null) {
-            jCheckBoxOrder = new JCheckBox();
-            jCheckBoxOrder.setBounds(new Rectangle(15, 75, 91, 31));
-            jCheckBoxOrder.setText("Flip");
-            jCheckBoxOrder.addItemListener(new java.awt.event.ItemListener() {
+			jButtonPrevAnswer
+					.addActionListener(e -> {
+						foldedModelInfo.setPrevORMat();
+						screen.redrawOrigami();
+						updateLabel();
+					});
+		}
+		return jButtonPrevAnswer;
+	}
 
-                @Override
-                public void itemStateChanged(java.awt.event.ItemEvent e) {
-                    screen.flipFaces(e.getStateChange() == ItemEvent.SELECTED);
-                }
-            });
-        }
-        return jCheckBoxOrder;
-    }
+	/**
+	 * This method initializes jCheckBoxOrder
+	 *
+	 * @return javax.swing.JCheckBox
+	 */
+	private JCheckBox getJCheckBoxOrder() {
+		if (jCheckBoxOrder == null) {
+			jCheckBoxOrder = new JCheckBox();
+			jCheckBoxOrder.setBounds(new Rectangle(15, 75, 91, 31));
+			jCheckBoxOrder.setText("Flip");
+			jCheckBoxOrder.addItemListener(e -> {
+				screen.flipFaces(e.getStateChange() == ItemEvent.SELECTED);
+			});
+		}
+		return jCheckBoxOrder;
 
-    /**
-     * This method initializes jCheckBoxShadow
-     *
-     * @return javax.swing.JCheckBox
-     */
-    private JCheckBox getJCheckBoxShadow() {
-        if (jCheckBoxShadow == null) {
-            jCheckBoxShadow = new JCheckBox();
-            jCheckBoxShadow.setBounds(new Rectangle(105, 75, 80, 31));
-            jCheckBoxShadow.setText("Shade");
+	}
 
-            jCheckBoxShadow.addItemListener(new java.awt.event.ItemListener() {
+	/**
+	 * This method initializes jCheckBoxShadow
+	 *
+	 * @return javax.swing.JCheckBox
+	 */
+	private JCheckBox getJCheckBoxShadow() {
+		if (jCheckBoxShadow == null) {
+			jCheckBoxShadow = new JCheckBox();
+			jCheckBoxShadow.setBounds(new Rectangle(105, 75, 80, 31));
+			jCheckBoxShadow.setText("Shade");
 
-                @Override
-                public void itemStateChanged(java.awt.event.ItemEvent e) {
-                    screen.shadeFaces(e.getStateChange() == ItemEvent.SELECTED);
-                }
-            });
-        }
-        return jCheckBoxShadow;
-    }
+			jCheckBoxShadow.addItemListener(e -> {
+				screen.shadeFaces(e.getStateChange() == ItemEvent.SELECTED);
+			});
+		}
+		return jCheckBoxShadow;
+	}
 
-    /**
-     * This method initializes jCheckBoxUseColor
-     *
-     * @return javax.swing.JCheckBox
-     */
-    private JCheckBox getJCheckBoxUseColor() {
-        if (jCheckBoxUseColor == null) {
-            jCheckBoxUseColor = new JCheckBox();
-            jCheckBoxUseColor.setBounds(new Rectangle(15, 120, 80, 31));
-            jCheckBoxUseColor.setSelected(true);
-            jCheckBoxUseColor.setText("Use Color");
+	/**
+	 * This method initializes jCheckBoxUseColor
+	 *
+	 * @return javax.swing.JCheckBox
+	 */
+	private JCheckBox getJCheckBoxUseColor() {
+		if (jCheckBoxUseColor == null) {
+			jCheckBoxUseColor = new JCheckBox();
+			jCheckBoxUseColor.setBounds(new Rectangle(15, 120, 80, 31));
+			jCheckBoxUseColor.setSelected(true);
+			jCheckBoxUseColor.setText("Use Color");
 
-            jCheckBoxUseColor.addItemListener(new java.awt.event.ItemListener() {
+			jCheckBoxUseColor
+					.addItemListener(e -> {
+						screen.setUseColor(e.getStateChange() == ItemEvent.SELECTED);
+					});
+		}
+		return jCheckBoxUseColor;
+	}
 
-                @Override
-                public void itemStateChanged(java.awt.event.ItemEvent e) {
-                    screen.setUseColor(e.getStateChange() == ItemEvent.SELECTED);
-                }
-            });
-        }
-        return jCheckBoxUseColor;
-    }
+	/**
+	 * This method initializes jCheckBoxEdge
+	 *
+	 * @return javax.swing.JCheckBox
+	 */
+	private JCheckBox getJCheckBoxEdge() {
+		if (jCheckBoxEdge == null) {
+			jCheckBoxEdge = new JCheckBox();
+			jCheckBoxEdge.setBounds(new Rectangle(105, 120, 93, 31));
+			jCheckBoxEdge.setSelected(true);
+			jCheckBoxEdge.setText("Draw Edge");
 
-    /**
-     * This method initializes jCheckBoxEdge
-     *
-     * @return javax.swing.JCheckBox
-     */
-    private JCheckBox getJCheckBoxEdge() {
-        if (jCheckBoxEdge == null) {
-            jCheckBoxEdge = new JCheckBox();
-            jCheckBoxEdge.setBounds(new Rectangle(105, 120, 93, 31));
-            jCheckBoxEdge.setSelected(true);
-            jCheckBoxEdge.setText("Draw Edge");
+			jCheckBoxEdge.addItemListener(e -> {
+				screen.drawEdge(e.getStateChange() == ItemEvent.SELECTED);
+			});
+		}
+		return jCheckBoxEdge;
+	}
 
-            jCheckBoxEdge.addItemListener(new java.awt.event.ItemListener() {
+	/**
+	 * This method initializes jCheckBoxFillFace
+	 *
+	 * @return javax.swing.JCheckBox
+	 */
+	private JCheckBox getJCheckBoxFillFace() {
+		if (jCheckBoxFillFace == null) {
+			jCheckBoxFillFace = new JCheckBox();
+			jCheckBoxFillFace.setBounds(new Rectangle(15, 165, 93, 21));
+			jCheckBoxFillFace.setSelected(true);
+			jCheckBoxFillFace.setText("FillFace");
 
-                @Override
-                public void itemStateChanged(java.awt.event.ItemEvent e) {
-                    screen.drawEdge(e.getStateChange() == ItemEvent.SELECTED);
-                }
-            });
-        }
-        return jCheckBoxEdge;
-    }
+			jCheckBoxFillFace
+					.addItemListener(e -> {
+						screen.setFillFace(e.getStateChange() == ItemEvent.SELECTED);
+					});
+		}
+		return jCheckBoxFillFace;
+	}
 
-    /**
-     * This method initializes jCheckBoxFillFace
-     *
-     * @return javax.swing.JCheckBox
-     */
-    private JCheckBox getJCheckBoxFillFace() {
-        if (jCheckBoxFillFace == null) {
-            jCheckBoxFillFace = new JCheckBox();
-            jCheckBoxFillFace.setBounds(new Rectangle(15, 165, 93, 21));
-            jCheckBoxFillFace.setSelected(true);
-            jCheckBoxFillFace.setText("FillFace");
+	/**
+	 * This method initializes jButtonExport
+	 *
+	 * @return javax.swing.JButton
+	 */
+	private JButton getJButtonExport() {
+		if (jButtonExport == null) {
+			jButtonExport = new JButton();
+			jButtonExport.setBounds(new Rectangle(15, 206, 92, 26));
+			jButtonExport.setText("Export");
+			jButtonExport
+					.addActionListener(e -> {
 
-            jCheckBoxFillFace.addItemListener(new java.awt.event.ItemListener() {
+						Doc doc = new Doc();
+						doc.setFoldedModelInfo(foldedModelInfo);
+						doc.setOrigamiModel(origamiModel);
 
-                @Override
-                public void itemStateChanged(java.awt.event.ItemEvent e) {
-                    screen.setFillFace(e.getStateChange() == ItemEvent.SELECTED);
-                }
-            });
-        }
-        return jCheckBoxFillFace;
-    }
+						try {
+							final DocDAO dao = new DocDAO();
+							dao.saveUsingGUI(
+									doc, null, EstimationResultUI.this, createFilters());
+						} catch (FileChooserCanceledException canceledEx) {
+						} catch (Exception ex) {
+							JOptionPane.showMessageDialog(
+									EstimationResultUI.this,
+									ex.toString(),
+									ORIPA.res
+											.getString("Error_FileSaveFaild"),
+									JOptionPane.ERROR_MESSAGE);
+						}
+					});
+		}
+		return jButtonExport;
+	}
 
-    /**
-     * This method initializes jButtonExport
-     *
-     * @return javax.swing.JButton
-     */
-    private JButton getJButtonExport() {
-        if (jButtonExport == null) {
-            jButtonExport = new JButton();
-            jButtonExport.setBounds(new Rectangle(15, 206, 92, 26));
-            jButtonExport.setText("Export");
-            jButtonExport.addActionListener(new java.awt.event.ActionListener() {
+	@SuppressWarnings("unchecked")
+	private FileAccessSupportFilter<Doc>[] createFilters() {
+		return new FileAccessSupportFilter[] {
 
-                @Override
-                public void actionPerformed(java.awt.event.ActionEvent e) {
-                    String ext1 = "ormat";
-                    String ext2 = "svg";
-                    JFileChooser fileChooser = new JFileChooser();
-                    FileFilterEx f1 = new FileFilterEx(new String[]{"." + ext1},
-                            "(*." + ext1 + ")" + ext1 + ORIPA.res.getString("File"));
-                    FileFilterEx f2 = new FileFilterEx(new String[]{"." + ext2},
-                            "(*." + ext2 + ")" + ext2 + ORIPA.res.getString("File"));
-                    fileChooser.addChoosableFileFilter(f1);
-                    fileChooser.addChoosableFileFilter(f2);
-                    fileChooser.setAcceptAllFileFilterUsed(false);
-                    fileChooser.setFileFilter(f2);
-                    if (JFileChooser.APPROVE_OPTION == fileChooser.showSaveDialog(ORIPA.mainFrame)) {
-                        try {
-                            String filePath = fileChooser.getSelectedFile().getPath();
-                            File file = new File(filePath);
-                            if (file.exists()) {
-                                if (JOptionPane.showConfirmDialog(
-                                        null, ORIPA.res.getString("Warning_SameNameFileExist"),
-                                        ORIPA.res.getString("DialogTitle_FileSave"),
-                                        JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
-                                        != JOptionPane.YES_OPTION) {
-                                    return;
-                                }
-                            }
-                            if (fileChooser.getFileFilter().equals(f1)) {
-                                if (!filePath.endsWith("." + ext1)) {
-                                    filePath += "." + ext1;
-                                }
-                                Exporter exporter = new ExporterORmat();
-                                exporter.export(ORIPA.doc, filePath);
-                            } else if (fileChooser.getFileFilter().equals(f2)) {
-                                if (!filePath.endsWith("." + ext2)) {
-                                    filePath += "." + ext2;
-                                }
-                                ExporterSVG.exportModel(ORIPA.doc, filePath);
-                            }
+				new FileAccessSupportFilter<Doc>(
+						FileTypeKey.ORMAT_FOLDED_MODEL,
+						".ormat file",
+						// ORIPA.res.getString("File"),
+						new SavingDocAction(new ExporterORmat())),
 
-                        } catch (Exception ex) {
-                            JOptionPane.showMessageDialog(
-                                    ORIPA.mainFrame, ex.toString(),
-                                    ORIPA.res.getString("Error_FileSaveFaild"),
-                                    JOptionPane.ERROR_MESSAGE);
-                        }
-                    }
-                }
-            });
-        }
-        return jButtonExport;
-    }
-}  //  @jve:decl-index=0:visual-constraint="8,8"
+				new FileAccessSupportFilter<Doc>(
+						FileTypeKey.SVG_FOLDED_MODEL,
+						".svg file",
+						// ORIPA.res.getString("File"),
+						new SavingDocAction(
+								ExporterSVGFactory.createFoldedModelExporter()))
+		};
+
+	}
+
+} // @jve:decl-index=0:visual-constraint="8,8"

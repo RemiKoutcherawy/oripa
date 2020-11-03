@@ -1,83 +1,97 @@
 package oripa.viewsetting.main;
 
 import java.awt.event.KeyEvent;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 
-import oripa.paint.GraphicMouseActionInterface;
-import oripa.paint.copypaste.CopyAndPasteAction;
-import oripa.paint.core.PaintConfig;
+import oripa.domain.paint.GraphicMouseActionInterface;
+import oripa.domain.paint.MouseActionHolder;
+import oripa.domain.paint.copypaste.CopyAndPasteAction;
 import oripa.viewsetting.ViewScreenUpdater;
-import oripa.viewsetting.ViewSettingDataBase;
 
-public class ScreenUpdater extends ViewSettingDataBase implements ViewScreenUpdater {
+public class ScreenUpdater implements
+		ViewScreenUpdater {
 
-	//-------------------------
+	private MouseActionHolder actionHolder;
+
+	private final PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
+
+	// -------------------------
 	// singleton
-	//-------------------------
+	// -------------------------
 	private static ScreenUpdater instance = null;
 
 	private ScreenUpdater() {
 	}
 
-
-	public static ScreenUpdater getInstance(){
-		if(instance == null){
+	public static ScreenUpdater getInstance() {
+		if (instance == null) {
 			instance = new ScreenUpdater();
 		}
 
 		return instance;
 	}
-	//-------------------------
 
+	public void setMouseActionHolder(final MouseActionHolder actionHolder) {
+		this.actionHolder = actionHolder;
+	}
 
-	/* (非 Javadoc)
+	// -------------------------
+
+	public void addPropertyChangeListener(final String propertyName,
+			final PropertyChangeListener listener) {
+		propertyChangeSupport.addPropertyChangeListener(propertyName, listener);
+	}
+
+	/*
+	 * (non Javadoc)
+	 *
 	 * @see oripa.viewsetting.main.ViewScreenUpdater#updateScreen()
 	 */
 	@Override
-	public void updateScreen(){
-		setChanged();
-		notifyObservers(REDRAW_REQUESTED);
+	public void updateScreen() {
+		propertyChangeSupport.firePropertyChange(REDRAW_REQUESTED, null, null);
 
 	}
 
-	
-	public class KeyListener implements java.awt.event.KeyListener{
+	public class KeyListener implements java.awt.event.KeyListener {
 		@Override
-		public void keyTyped(KeyEvent e) {
+		public void keyTyped(final KeyEvent e) {
 		}
 
 		@Override
-		public void keyPressed(KeyEvent e) {
-			
-			if(e.isControlDown()){
+		public void keyPressed(final KeyEvent e) {
+			if (e.isControlDown()) {
 				updateIfCopyAndPaste(true);
-			}
-			else if(e.getKeyCode() == KeyEvent.VK_ESCAPE){
+			} else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
 				updateScreen();
-				
+
 			}
 
 		}
 
 		@Override
-		public void keyReleased(KeyEvent e) {
+		public void keyReleased(final KeyEvent e) {
 			updateIfCopyAndPaste(false);
 		}
 
 	}
-	
-	private void updateIfCopyAndPaste(boolean changeOrigin){
-		GraphicMouseActionInterface action = PaintConfig.getMouseAction();
 
-		if(action instanceof CopyAndPasteAction){
+	private void updateIfCopyAndPaste(final boolean changeOrigin) {
+		GraphicMouseActionInterface action = actionHolder.getMouseAction();
+
+		if (action instanceof CopyAndPasteAction) {
 			CopyAndPasteAction casted = (CopyAndPasteAction) action;
 			casted.changeAction(changeOrigin);
 
 			updateScreen();
 		}
-		
+
 	}
 
-	/* (非 Javadoc)
+	/*
+	 * (non Javadoc)
+	 *
 	 * @see oripa.viewsetting.main.ViewScreenUpdater#getKeyListener()
 	 */
 	@Override

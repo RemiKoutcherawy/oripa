@@ -1,34 +1,33 @@
 package oripa.paint.creasepattern.tool;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Collection;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import oripa.paint.creasepattern.tool.RectangleDomain;
+import oripa.geom.RectangleDomain;
 import oripa.value.OriLine;
 import oripa.value.OriPoint;
 
 public class RectangleDomainTestWithXShapeLines {
 
-
 	@Test
 	public void test() {
 		final double shapeSize = 100;
 		final OriPoint center = new OriPoint(50, 50);
-		CreasePatternFactory factory = new CreasePatternFactory();
-		
+		TestCreasePatternFactory factory = new TestCreasePatternFactory();
+
 		// 'X' shape lines
 		Collection<OriLine> xLines = factory.createCrossedLines(100, center);
 
-		// the lines should be in regular a rectangle (0, 100, 0, 100)
+		// the lines should be in regular rectangle (0, 100, 0, 100)
 		RectangleDomain domain = new RectangleDomain(xLines);
-		
+
 		final double delta = 1e-8;
 		assertEquals(100, domain.getRight(), delta);
-		assertEquals(0,   domain.getLeft(), delta);
-		assertEquals(0,   domain.getTop(), delta);
+		assertEquals(0, domain.getLeft(), delta);
+		assertEquals(0, domain.getTop(), delta);
 		assertEquals(100, domain.getBottom(), delta);
 
 		assertEquals(shapeSize, domain.getWidth(), delta);

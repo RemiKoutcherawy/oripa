@@ -1,5 +1,5 @@
 /**
- * ORIPA - Origami Pattern Editor 
+ * ORIPA - Origami Pattern Editor
  * Copyright (C) 2005-2009 Jun Mitani http://mitani.cs.tsukuba.ac.jp/
 
     This program is free software: you can redistribute it and/or modify
@@ -21,53 +21,44 @@ package oripa.view.estimation;
 import java.awt.BorderLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.Observable;
-import java.util.Observer;
 
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 
-import oripa.viewsetting.estimation.RenderFrameSettingDB;
+import oripa.domain.fold.FoldedModelInfo;
+import oripa.domain.fold.OrigamiModel;
 
-
-public class EstimationResultFrame extends JFrame implements ActionListener, Observer {
-
-	private RenderFrameSettingDB setting = RenderFrameSettingDB.getInstance();
+public class EstimationResultFrame extends JFrame implements ActionListener {
 
 	FoldedModelScreen screen;
-    EstimationResultUI ui;
-    public JLabel hintLabel;
+	EstimationResultUI ui;
+	public JLabel hintLabel;
 
-    public EstimationResultFrame() {
-    	setting.addObserver(this);
-    	
-        setTitle("Folded Origami");
-        screen = new FoldedModelScreen();
-        ui = new EstimationResultUI();
-        ui.setScreen(screen);
-        hintLabel = new JLabel("L: Rotate / Wheel: Zoom");
-        setBounds(0, 0, 800, 600);
-        getContentPane().setLayout(new BorderLayout());
-        getContentPane().add(ui, BorderLayout.WEST);
-        getContentPane().add(screen, BorderLayout.CENTER);
-        getContentPane().add(hintLabel, BorderLayout.SOUTH);
+	public EstimationResultFrame() {
+		setTitle("Folded Origami");
+		screen = new FoldedModelScreen();
+		ui = new EstimationResultUI();
+		ui.setScreen(screen);
+		hintLabel = new JLabel("L: Rotate / Wheel: Zoom");
+		setBounds(0, 0, 800, 600);
+		getContentPane().setLayout(new BorderLayout());
+		getContentPane().add(ui, BorderLayout.WEST);
+		getContentPane().add(screen, BorderLayout.CENTER);
+		getContentPane().add(hintLabel, BorderLayout.SOUTH);
 
-    }
+	}
 
-    @Override
-    public void actionPerformed(ActionEvent arg0) {
-        // TODO Auto-generated method stub
-    }
-    
-    @Override
-    public void update(Observable o, Object arg) {
+	public void setModel(
+			final OrigamiModel origamiModel, final FoldedModelInfo foldedModelInfo) {
 
-    	
-    	if(setting.isFrameVisible()){
-	    	screen.resetViewMatrix();
-			screen.redrawOrigami();
-			ui.updateLabel();
-			setVisible(true);
-    	}    	
-    }
+		screen.setModel(origamiModel, foldedModelInfo);
+		ui.setModel(origamiModel, foldedModelInfo);
+		ui.updateLabel();
+		// setVisible(true);
+	}
+
+	@Override
+	public void actionPerformed(final ActionEvent arg0) {
+		// TODO Auto-generated method stub
+	}
 }

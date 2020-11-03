@@ -1,5 +1,5 @@
 /**
- * ORIPA - Origami Pattern Editor 
+ * ORIPA - Origami Pattern Editor
  * Copyright (C) 2005-2009 Jun Mitani http://mitani.cs.tsukuba.ac.jp/
 
     This program is free software: you can redistribute it and/or modify
@@ -19,22 +19,18 @@
 package oripa.view.main;
 
 import java.awt.BorderLayout;
-import java.awt.Image;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.util.Observable;
-import java.util.Observer;
+import java.util.stream.IntStream;
 
-import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
@@ -43,143 +39,155 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import oripa.Config;
 import oripa.ORIPA;
 import oripa.bind.ButtonFactory;
 import oripa.bind.PaintActionButtonFactory;
-import oripa.doc.Doc;
-import oripa.doc.exporter.ExporterXML;
-import oripa.file.FileChooser;
-import oripa.file.FileChooserFactory;
-import oripa.file.FileFilterEx;
+import oripa.controller.DeleteSelectedLinesActionListener;
+import oripa.controller.UnselectAllLinesActionListener;
+import oripa.domain.cptool.Painter;
+import oripa.domain.paint.MouseActionHolder;
+import oripa.domain.paint.PaintContextFactory;
+import oripa.domain.paint.PaintContextInterface;
 import oripa.file.FileHistory;
-import oripa.file.FileVersionError;
-import oripa.file.FilterDB;
 import oripa.file.ImageResourceLoader;
-import oripa.file.SavingAction;
-import oripa.fold.OrigamiModel;
-import oripa.fold.OrigamiModelFactory;
-import oripa.paint.core.PaintConfig;
-import oripa.paint.core.PaintContext;
-import oripa.paint.creasepattern.CreasePattern;
-import oripa.paint.creasepattern.Painter;
-import oripa.paint.util.DeleteSelectedLines;
+import oripa.persistent.doc.Doc;
+import oripa.persistent.doc.DocDAO;
+import oripa.persistent.doc.DocFilterSelector;
+import oripa.persistent.doc.FileTypeKey;
+import oripa.persistent.filetool.AbstractSavingAction;
+import oripa.persistent.filetool.FileAccessSupportFilter;
+import oripa.persistent.filetool.FileChooserCanceledException;
+import oripa.persistent.filetool.FileVersionError;
 import oripa.resource.Constants;
 import oripa.resource.ResourceHolder;
 import oripa.resource.ResourceKey;
 import oripa.resource.StringID;
+import oripa.util.gui.ChildFrameManager;
+import oripa.viewsetting.ViewScreenUpdater;
 import oripa.viewsetting.main.MainFrameSettingDB;
 import oripa.viewsetting.main.MainScreenSettingDB;
 
-public class MainFrame extends JFrame implements ActionListener,
-		ComponentListener, WindowListener, Observer {
+public class MainFrame extends JFrame implements ComponentListener, WindowListener {
 
+	private static final Logger logger = LoggerFactory.getLogger(MainFrame.class);
 
 	/**
-	 * 
+	 *
 	 */
 	private static final long serialVersionUID = 272369294032419950L;
 
-	private MainFrameSettingDB setting = MainFrameSettingDB.getInstance();
-	private MainScreenSettingDB screenSetting = MainScreenSettingDB.getInstance();
-	private PaintContext mouseContext = PaintContext.getInstance();
+	private final MainFrameSettingDB setting = MainFrameSettingDB.getInstance();
+	private final MainScreenSettingDB screenSetting = MainScreenSettingDB
+			.getInstance();
 
-	PainterScreen mainScreen;
-	private JMenu menuFile = new JMenu(
+	private final PainterScreen mainScreen;
+	private final JMenu menuFile = new JMenu(
 			ORIPA.res.getString(StringID.Main.FILE_ID));
-	private JMenu menuEdit = new JMenu(ORIPA.res.getString("Edit"));
-	private JMenu menuHelp = new JMenu(ORIPA.res.getString("Help"));
-	private JMenuItem menuItemClear = new JMenuItem(ORIPA.res.getString("New"));
-	private JMenuItem menuItemOpen = new JMenuItem(ORIPA.res.getString("Open"));
+	private final JMenu menuEdit = new JMenu(ORIPA.res.getString("Edit"));
+	private final JMenu menuHelp = new JMenu(ORIPA.res.getString("Help"));
+	private final JMenuItem menuItemClear = new JMenuItem(
+			ORIPA.res.getString("New"));
+	private final JMenuItem menuItemOpen = new JMenuItem(
+			ORIPA.res.getString("Open"));
 
-	private JMenuItem menuItemSave = new JMenuItem(ORIPA.res.getString("Save"));
-	private JMenuItem menuItemSaveAs = new JMenuItem(
+	private final JMenuItem menuItemSave = new JMenuItem(
+			ORIPA.res.getString("Save"));
+	private final JMenuItem menuItemSaveAs = new JMenuItem(
 			ORIPA.res.getString("SaveAs"));
-	private JMenuItem menuItemSaveAsImage = new JMenuItem(
+	private final JMenuItem menuItemSaveAsImage = new JMenuItem(
 			ORIPA.res.getString("SaveAsImage"));
 
-	private JMenuItem menuItemExportDXF = new JMenuItem("Export DXF");
-	private JMenuItem menuItemExportOBJ = new JMenuItem("Export OBJ");
-	private JMenuItem menuItemExportCP = new JMenuItem("Export CP");
-	private JMenuItem menuItemExportSVG = new JMenuItem("Export SVG");
+	private final JMenuItem menuItemExportDXF = new JMenuItem("Export DXF");
+	private final JMenuItem menuItemExportOBJ = new JMenuItem("Export OBJ");
+	private final JMenuItem menuItemExportCP = new JMenuItem("Export CP");
+	private final JMenuItem menuItemExportSVG = new JMenuItem("Export SVG");
 
 	// -----------------------------------------------------------------------------------------------------------
 	// Create paint button
 
-	ButtonFactory buttonFactory = new PaintActionButtonFactory();
-	
+	private final PaintContextFactory contextFactory = new PaintContextFactory();
+	private final PaintContextInterface paintContext = contextFactory.createContext();
+	private final MouseActionHolder actionHolder = new MouseActionHolder();
+
+	private final ButtonFactory buttonFactory = new PaintActionButtonFactory(paintContext);
+
 	/**
 	 * For changing outline
 	 */
-	private JMenuItem menuItemChangeOutline = (JMenuItem) buttonFactory.create(
-			this, JMenuItem.class, StringID.EDIT_CONTOUR_ID);
+	private JMenuItem menuItemChangeOutline;
 
 	/**
 	 * For selecting all lines
 	 */
-	private JMenuItem menuItemSelectAll = (JMenuItem) buttonFactory.create(
-			this, JMenuItem.class, StringID.SELECT_ALL_LINE_ID);
+	private JMenuItem menuItemSelectAll;
 
 	/**
 	 * For starting copy-and-paste
 	 */
-	private JMenuItem menuItemCopyAndPaste = (JMenuItem) buttonFactory.create(
-			this, JMenuItem.class, StringID.COPY_PASTE_ID);
+	private JMenuItem menuItemCopyAndPaste;
 
 	/**
 	 * For starting cut-and-paste
 	 */
-	private JMenuItem menuItemCutAndPaste = (JMenuItem) buttonFactory.create(
-			this, JMenuItem.class, StringID.CUT_PASTE_ID);
+	private JMenuItem menuItemCutAndPaste;
 
-	// -----------------------------------------------------------------------------------------------------------
+	// ---------------------------------------------------------------------------------------------
 
-
-	private ResourceHolder resourceHolder = ResourceHolder.getInstance();
-	private JMenuItem menuItemProperty = new JMenuItem(
+	private final ViewScreenUpdater screenUpdater;
+	private final ResourceHolder resourceHolder = ResourceHolder.getInstance();
+	private final JMenuItem menuItemProperty = new JMenuItem(
 			resourceHolder.getString(ResourceKey.LABEL,
 					StringID.Main.PROPERTY_ID));
 
-	private JMenuItem menuItemExit = new JMenuItem(resourceHolder.getString(
-			ResourceKey.LABEL, StringID.Main.EXIT_ID));
-	private JMenuItem menuItemUndo = new JMenuItem(ORIPA.res.getString("Undo"));
-	private JMenuItem menuItemAbout = new JMenuItem(
+	private final JMenuItem menuItemExit = new JMenuItem(
+			resourceHolder.getString(ResourceKey.LABEL, StringID.Main.EXIT_ID));
+	private final JMenuItem menuItemUndo = new JMenuItem(
+			ORIPA.res.getString("Undo"));
+	private final JMenuItem menuItemAbout = new JMenuItem(
 			ORIPA.res.getString("About"));
-	private JMenuItem menuItemRepeatCopy = new JMenuItem("Array Copy");
-	private JMenuItem menuItemCircleCopy = new JMenuItem("Circle Copy");
-	private JMenuItem menuItemUnSelectAll = new JMenuItem("UnSelect All");
+	private final JMenuItem menuItemRepeatCopy = new JMenuItem("Array Copy");
+	private final JMenuItem menuItemCircleCopy = new JMenuItem("Circle Copy");
 
-	private JMenuItem menuItemDeleteSelectedLines = new JMenuItem(
+	private final JMenuItem menuItemUnSelectAll = new JMenuItem("UnSelect All");
+
+	private final JMenuItem menuItemDeleteSelectedLines = new JMenuItem(
 			"Delete Selected Lines");
-	private JMenuItem[] MRUFilesMenuItem = new JMenuItem[Config.MRUFILE_NUM];
+	private final JMenuItem[] MRUFilesMenuItem = new JMenuItem[Config.MRUFILE_NUM];
 
 	private RepeatCopyDialog arrayCopyDialog;
 	private CircleCopyDialog circleCopyDialog;
 	public static JLabel hintLabel = new JLabel();
 	public UIPanel uiPanel;
 
-	private FileHistory fileHistory = new FileHistory(Config.MRUFILE_NUM);
+	private final FileHistory fileHistory = new FileHistory(Config.MRUFILE_NUM);
 
-	private FilterDB filterDB = FilterDB.getInstance();
-	private FileFilterEx[] fileFilters = new FileFilterEx[] {
+	private final DocFilterSelector filterDB = new DocFilterSelector();
 
-	filterDB.getFilter("opx"), filterDB.getFilter("pict") };
+	private final Doc document = new Doc();
 
 	public MainFrame() {
+		logger.info("frame construction starts.");
 
-		setting.addObserver(this);
+		document.setCreasePattern(paintContext.getCreasePattern());
 
-		// addKeyListener(this);
+		addPropertyChangeListenersToSetting();
+
+		mainScreen = new PainterScreen(actionHolder, paintContext, document);
+		screenUpdater = mainScreen.getScreenUpdater();
+		createPaintMenuItems();
 
 		menuItemCopyAndPaste.setText(resourceHolder.getString(
 				ResourceKey.LABEL, StringID.COPY_PASTE_ID));
-		menuItemCutAndPaste.setText(resourceHolder.getString(
-				ResourceKey.LABEL, StringID.CUT_PASTE_ID));
+		menuItemCutAndPaste.setText(resourceHolder.getString(ResourceKey.LABEL,
+				StringID.CUT_PASTE_ID));
 		// menuItemChangeOutline.setText(ORIPA.res.getString(StringID.Menu.CONTOUR_ID));
 
-		mainScreen = new PainterScreen();
 		addWindowListener(this);
-		uiPanel = new UIPanel(mainScreen);
+		uiPanel = new UIPanel(screenUpdater, actionHolder, paintContext, document, document);
 		getContentPane().setLayout(new BorderLayout());
 		getContentPane().add(uiPanel, BorderLayout.WEST);
 		getContentPane().add(mainScreen, BorderLayout.CENTER);
@@ -189,78 +197,16 @@ public class MainFrame extends JFrame implements ActionListener,
 		this.setIconImage(imgLoader.loadAsIcon("icon/oripa.gif", getClass())
 				.getImage());
 
-		menuItemOpen.addActionListener(this);
-		menuItemOpen.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O,
-				ActionEvent.CTRL_MASK));
+		IntStream.range(0, Config.MRUFILE_NUM)
+				.forEach(i -> MRUFilesMenuItem[i] = new JMenuItem());
 
-		menuItemSave.addActionListener(this);
-		menuItemSave.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S,
-				ActionEvent.CTRL_MASK));
-
-		menuItemSaveAs.addActionListener(this);
-		menuItemSaveAsImage.addActionListener(this);
-
-		menuItemExit.addActionListener(this);
-		// menuItemExit.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_X,
-		// ActionEvent.CTRL_MASK));
-
-		menuItemUndo.addActionListener(this);
-		menuItemUndo.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z,
-				ActionEvent.CTRL_MASK));
-
-		menuItemClear.addActionListener(this);
-		menuItemClear.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,
-				ActionEvent.CTRL_MASK));
-
-		menuItemAbout.addActionListener(this);
-		menuItemExportDXF.addActionListener(this);
-		menuItemExportOBJ.addActionListener(this);
-		menuItemExportCP.addActionListener(this);
-		menuItemExportSVG.addActionListener(this);
-		menuItemProperty.addActionListener(this);
-		menuItemChangeOutline.addActionListener(this);
-		menuItemRepeatCopy.addActionListener(this);
-		menuItemCircleCopy.addActionListener(this);
-		menuItemSelectAll.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_A,
-				ActionEvent.CTRL_MASK));
-
-		menuItemUnSelectAll.setAccelerator(KeyStroke.getKeyStroke(
-				KeyEvent.VK_ESCAPE, 0));
-
-		menuItemUnSelectAll
-				.addActionListener(new java.awt.event.ActionListener() {
-					@Override
-					public void actionPerformed(java.awt.event.ActionEvent e) {
-						CreasePattern creasePattern = ORIPA.doc.getCreasePattern();
-						Painter painter = new Painter();
-						painter.resetSelectedOriLines(creasePattern);
-						
-						mouseContext.clear(false);
-						mainScreen.repaint();
-					}
-				});
-
-		menuItemDeleteSelectedLines
-				.addActionListener(new DeleteSelectedLines());
-		menuItemDeleteSelectedLines.setAccelerator(KeyStroke.getKeyStroke(
-				KeyEvent.VK_DELETE, 0));
-
-		menuItemCopyAndPaste.setAccelerator(KeyStroke.getKeyStroke(
-				KeyEvent.VK_C, ActionEvent.CTRL_MASK));
-		menuItemCutAndPaste.setAccelerator(KeyStroke.getKeyStroke(
-				KeyEvent.VK_X, ActionEvent.CTRL_MASK));
-
-
-		for (int i = 0; i < Config.MRUFILE_NUM; i++) {
-			MRUFilesMenuItem[i] = new JMenuItem();
-			MRUFilesMenuItem[i].addActionListener(this);
-		}
+		addActionListenersToComponents();
 
 		loadIniFile();
 
 		// Building the menu bar
 		JMenuBar menuBar = new JMenuBar();
-		buildMenuFile();
+		buildFileMenu();
 
 		menuEdit.add(menuItemCopyAndPaste);
 		menuEdit.add(menuItemCutAndPaste);
@@ -279,256 +225,291 @@ public class MainFrame extends JFrame implements ActionListener,
 		menuBar.add(menuHelp);
 		setJMenuBar(menuBar);
 
-		addSavingActions();
-	}
-
-	private void addSavingActions() {
-
-		filterDB.getFilter("pict").setSavingAction(new SavingAction() {
-
-			@Override
-			public boolean save(String path) {
-				try {
-					savePictureFile(mainScreen.getCreasePatternImage(), path);
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-					return false;
-				}
-
-				return true;
-			}
-		});
-
-		filterDB.getFilter("opx").setSavingAction(new SavingAction() {
-
-			@Override
-			public boolean save(String path) {
-				try {
-					saveOpxFile(path);
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-					return false;
-				}
-				return true;
-
-			}
-		});
-	}
-
-	private void saveOpxFile(String filePath) {
-		ExporterXML exporter = new ExporterXML();
-		exporter.export(ORIPA.doc, filePath);
-		ORIPA.doc.setDataFilePath(filePath);
-
-		updateMenu(filePath);
-
-		ORIPA.doc.clearChanged();
-	}
-
-	private void savePictureFile(Image cpImage, String filePath)
-			throws IOException {
-		BufferedImage image = new BufferedImage(cpImage.getWidth(this),
-				cpImage.getHeight(this), BufferedImage.TYPE_INT_RGB);
-
-		image.getGraphics().drawImage(cpImage, 0, 0, this);
-
-		File file = new File(filePath);
-		ImageIO.write(image, filePath.substring(filePath.lastIndexOf(".") + 1),
-				file);
+		modifySavingActions();
 	}
 
 	public void initialize() {
-		arrayCopyDialog = new RepeatCopyDialog(this);
-		circleCopyDialog = new CircleCopyDialog(this);
+		arrayCopyDialog = new RepeatCopyDialog(this, paintContext);
+		circleCopyDialog = new CircleCopyDialog(this, paintContext);
 	}
 
-	@Override
-	public void actionPerformed(ActionEvent e) {
-		Doc document = ORIPA.doc;
-		CreasePattern creasePattern = document.getCreasePattern();
+	private void createPaintMenuItems() {
+		/**
+		 * For changing outline
+		 */
+		menuItemChangeOutline = (JMenuItem) buttonFactory
+				.create(this, JMenuItem.class, actionHolder, screenUpdater,
+						StringID.EDIT_CONTOUR_ID, null);
 
-		// Check the last opened files
-		for (int i = 0; i < Config.MRUFILE_NUM; i++) {
-			if (e.getSource() == MRUFilesMenuItem[i]) {
-				try {
-					String filePath = MRUFilesMenuItem[i].getText();
-					openFile(filePath);
-					updateTitleText();
-				} catch (Exception ex) {
-					JOptionPane.showMessageDialog(this, e.toString(),
-							ORIPA.res.getString("Error_FileLoadFailed"),
-							JOptionPane.ERROR_MESSAGE);
-				}
-				mainScreen.repaint();
-				return;
-			}
-		}
+		/**
+		 * For selecting all lines
+		 */
+		menuItemSelectAll = (JMenuItem) buttonFactory
+				.create(this, JMenuItem.class, actionHolder, screenUpdater,
+						StringID.SELECT_ALL_LINE_ID, null);
 
-		//TODO Refactor the long, long if-else sequences!
-		
-		// String lastPath = fileHistory.getLastPath();
-		String lastDirectory = fileHistory.getLastDirectory();
+		/**
+		 * For starting copy-and-paste
+		 */
+		menuItemCopyAndPaste = (JMenuItem) buttonFactory
+				.create(this, JMenuItem.class, actionHolder, screenUpdater, StringID.COPY_PASTE_ID,
+						null);
 
-		if (e.getSource() == menuItemOpen) {
-			openFile(null);
+		/**
+		 * For starting cut-and-paste
+		 */
+		menuItemCutAndPaste = (JMenuItem) buttonFactory
+				.create(this, JMenuItem.class, actionHolder, screenUpdater, StringID.CUT_PASTE_ID,
+						null);
+	}
+
+	private void addActionListenersToComponents() {
+		menuItemOpen.addActionListener(e -> {
+			String path = openFile(null);
 			mainScreen.repaint();
-			updateTitleText();
-		} else if (e.getSource() == menuItemSave
-				&& !ORIPA.doc.getDataFilePath().equals("")) {
-			saveOpxFile(ORIPA.doc.getDataFilePath());
-
-		} else if (e.getSource() == menuItemSaveAs
-				|| e.getSource() == menuItemSave) {
-
-			String path = saveFile(lastDirectory, ORIPA.doc.getDataFileName(),
-					fileFilters);
-
 			updateMenu(path);
 			updateTitleText();
+		});
 
-		} else if (e.getSource() == menuItemSaveAsImage) {
+		menuItemOpen.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O,
+				InputEvent.CTRL_DOWN_MASK));
 
-			saveFile(lastDirectory, ORIPA.doc.getDataFileName(),
-					new FileFilterEx[] { filterDB.getFilter("pict") });
-
-		} else if (e.getSource() == menuItemExportDXF) {
-			exportFile("dxf");
-		} else if (e.getSource() == menuItemExportOBJ) {
-			exportFile("obj");
-		} else if (e.getSource() == menuItemExportCP) {
-			exportFile("cp");
-		} else if (e.getSource() == menuItemExportSVG) {
-			exportFile("svg");
-		} else if (e.getSource() == menuItemChangeOutline) {
-			// Globals.preEditMode = Globals.editMode;
-			// Globals.editMode = Constants.EditMode.EDIT_OUTLINE;
-
-			// Globals.setMouseAction(new EditOutlineAction());
-
-		} else if (e.getSource() == menuItemExit) {
-			saveIniFile();
-			System.exit(0);
-		} else if (e.getSource() == menuItemUndo) {
-			if (PaintConfig.getMouseAction() != null) {
-				PaintConfig.getMouseAction().undo(mouseContext);
+		menuItemSave.addActionListener(e -> {
+			if (!document.getDataFilePath().equals("")) {
+				saveOpxFile(document, document.getDataFilePath());
 			} else {
-				ORIPA.doc.loadUndoInfo();
+				saveAnyTypeUsingGUI();
+			}
+		});
+		menuItemSave.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S,
+				InputEvent.CTRL_DOWN_MASK));
+
+		menuItemSaveAs.addActionListener(e -> saveAnyTypeUsingGUI());
+		menuItemSaveAsImage.addActionListener(e -> {
+			String lastDirectory = fileHistory.getLastDirectory();
+			saveFile(lastDirectory, document.getDataFileName(),
+					filterDB.getFilter(FileTypeKey.PICT));
+		});
+
+		menuItemExit.addActionListener(e -> exit());
+
+		menuItemUndo.addActionListener(e -> {
+			try {
+				actionHolder.getMouseAction().undo(paintContext);
+			} catch (NullPointerException ex) {
+				if (actionHolder.getMouseAction() == null) {
+					logger.error("mouseAction should not be null.", ex);
+				} else {
+					logger.error("Wrong implementation.", ex);
+				}
 			}
 			mainScreen.repaint();
-		} else if (e.getSource() == menuItemClear) {
-			ORIPA.doc = new Doc(Constants.DEFAULT_PAPER_SIZE);
-			ORIPA.modelFrame.repaint();
+		});
+		menuItemUndo.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z,
+				InputEvent.CTRL_DOWN_MASK));
 
-			ORIPA.modelFrame.setVisible(false);
-			ORIPA.renderFrame.setVisible(false);
+		menuItemClear.addActionListener(e -> clear());
+		menuItemClear.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,
+				InputEvent.CTRL_DOWN_MASK));
 
-			screenSetting.setGridVisible(true);
-			screenSetting.notifyObservers();
+		menuItemAbout.addActionListener(e -> JOptionPane.showMessageDialog(this,
+				resourceHolder.getString(ResourceKey.APP_INFO, StringID.AppInfo.ABOUT_THIS_ID),
+				resourceHolder.getString(ResourceKey.LABEL, StringID.Main.TITLE_ID),
+				JOptionPane.INFORMATION_MESSAGE));
 
-			// ORIPA.mainFrame.uiPanel.dispGridCheckBox.setSelected(true);
-			updateTitleText();
-		} else if (e.getSource() == menuItemAbout) {
-			JOptionPane.showMessageDialog(this, ORIPA.infoString,
-					ORIPA.res.getString("Title"),
-					JOptionPane.INFORMATION_MESSAGE);
-		} else if (e.getSource() == menuItemProperty) {
-			PropertyDialog dialog = new PropertyDialog(this);
-			dialog.setValue();
-			Rectangle rec = getBounds();
-			dialog.setLocation(
-					(int) (rec.getCenterX() - dialog.getWidth() / 2),
-					(int) (rec.getCenterY() - dialog.getHeight() / 2));
-			dialog.setModal(true);
-			dialog.setVisible(true);
-		} else if (e.getSource() == menuItemRepeatCopy) {
-			Painter painter = new Painter();
-			if (painter.countSelectedLines(creasePattern) == 0) {
-				JOptionPane.showMessageDialog(this, "Select target lines",
-						"ArrayCopy", JOptionPane.WARNING_MESSAGE);
+		menuItemExportDXF.addActionListener(e -> saveFileWithModelCheck(FileTypeKey.DXF_MODEL));
+		menuItemExportOBJ.addActionListener(e -> saveFileWithModelCheck(FileTypeKey.OBJ_MODEL));
+		menuItemExportCP.addActionListener(e -> saveFileWithModelCheck(FileTypeKey.CP));
+		menuItemExportSVG.addActionListener(e -> saveFileWithModelCheck(FileTypeKey.SVG));
 
-			} else {
-				arrayCopyDialog.setVisible(true);
-			}
-		} else if (e.getSource() == menuItemCircleCopy) {
-			Painter painter = new Painter();
-			if (painter.countSelectedLines(creasePattern) == 0) {
-				JOptionPane.showMessageDialog(this, "Select target lines",
-						"ArrayCopy", JOptionPane.WARNING_MESSAGE);
+		menuItemProperty.addActionListener(e -> showPropertyDialog());
+		menuItemRepeatCopy.addActionListener(e -> showArrayCopyDialog());
+		menuItemCircleCopy.addActionListener(e -> showCircleCopyDialog());
 
-			} else {
-				circleCopyDialog.setVisible(true);
-			}
+		// a patch to select all lines and switch to select-line mode.
+		// bad design...
+		menuItemSelectAll.addActionListener(event -> {
+			paintContext.creasePatternUndo().pushUndoInfo();
+			paintContext.getPainter().selectAllOriLines();
+			paintContext.getCreasePattern().stream()
+					.filter(l -> l.selected).forEach(l -> paintContext.pushLine(l));
+		});
+		menuItemSelectAll.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_A,
+				InputEvent.CTRL_DOWN_MASK));
+
+		menuItemUnSelectAll.addActionListener(
+				new UnselectAllLinesActionListener(paintContext, screenUpdater));
+		menuItemUnSelectAll.setAccelerator(KeyStroke.getKeyStroke(
+				KeyEvent.VK_ESCAPE, 0));
+
+		menuItemDeleteSelectedLines
+				.addActionListener(
+						new DeleteSelectedLinesActionListener(paintContext, screenUpdater));
+		menuItemDeleteSelectedLines.setAccelerator(KeyStroke.getKeyStroke(
+				KeyEvent.VK_DELETE, 0));
+
+		menuItemCopyAndPaste.setAccelerator(KeyStroke.getKeyStroke(
+				KeyEvent.VK_C, InputEvent.CTRL_DOWN_MASK));
+		menuItemCutAndPaste.setAccelerator(KeyStroke.getKeyStroke(
+				KeyEvent.VK_X, InputEvent.CTRL_DOWN_MASK));
+
+		for (int i = 0; i < Config.MRUFILE_NUM; i++) {
+			MRUFilesMenuItem[i].addActionListener(this::openFileFromMRUFileMenuItem);
 		}
 
+	}
+
+	private void modifySavingActions() {
+
+		// overwrite the action to update GUI after saving.
+		filterDB.getFilter(FileTypeKey.OPX).setSavingAction(
+				new AbstractSavingAction<Doc>() {
+
+					@Override
+					public boolean save(final Doc data) {
+						try {
+							saveOpxFile(data, getPath());
+						} catch (Exception e) {
+							logger.error("Failed to save file " + getPath(), e);
+							return false;
+						}
+						return true;
+					}
+				});
+	}
+
+	void saveOpxFile(final Doc doc, final String filePath) {
+		final DocDAO dao = new DocDAO();
+
+		dao.save(doc, filePath, FileTypeKey.OPX);
+		doc.setDataFilePath(filePath);
+
+		paintContext.creasePatternUndo().clearChanged();
+
+		updateMenu(filePath);
+		updateTitleText();
+	}
+
+	private void openFileFromMRUFileMenuItem(final ActionEvent e) {
+
+		var menuItem = (JMenuItem) (e.getSource());
+		try {
+			String filePath = menuItem.getText();
+			openFile(filePath);
+			updateTitleText();
+		} catch (Exception ex) {
+			showErrorDialog(ORIPA.res.getString("Error_FileLoadFailed"), ex);
+		}
+		mainScreen.repaint();
+	}
+
+	private void saveAnyTypeUsingGUI() {
+		String lastDirectory = fileHistory.getLastDirectory();
+
+		String path = saveFile(lastDirectory, document.getDataFileName(),
+				filterDB.getSavables());
+
+		updateMenu(path);
+		updateTitleText();
+
+	}
+
+	private void exit() {
+		saveIniFile();
+		System.exit(0);
+	}
+
+	private void clear() {
+		document.set(new Doc(Constants.DEFAULT_PAPER_SIZE));
+		paintContext.setCreasePattern(document.getCreasePattern());
+
+		ChildFrameManager manager = ChildFrameManager.getManager();
+		manager.closeAllRecursively(this);
+
+		screenSetting.setGridVisible(true);
+
+		updateTitleText();
+	}
+
+	private void showPropertyDialog() {
+		AbstractPropertyDialog dialog = new PropertyDialog(this, document);
+
+		dialog.setValue();
+		Rectangle rec = getBounds();
+		dialog.setLocation(
+				(int) (rec.getCenterX() - dialog.getWidth() / 2),
+				(int) (rec.getCenterY() - dialog.getHeight() / 2));
+		dialog.setModal(true);
+		dialog.setVisible(true);
+	}
+
+	private void showArrayCopyDialog() {
+		Painter painter = paintContext.getPainter();
+		if (painter.countSelectedLines() == 0) {
+			JOptionPane.showMessageDialog(this, "Select target lines",
+					"ArrayCopy", JOptionPane.WARNING_MESSAGE);
+
+		} else {
+			arrayCopyDialog.setVisible(true);
+		}
+	}
+
+	private void showCircleCopyDialog() {
+		Painter painter = paintContext.getPainter();
+		if (painter.countSelectedLines() == 0) {
+			JOptionPane.showMessageDialog(this, "Select target lines",
+					"CircleCopy", JOptionPane.WARNING_MESSAGE);
+
+		} else {
+			circleCopyDialog.setVisible(true);
+		}
 	}
 
 	public void updateTitleText() {
 		String fileName;
-		if ((ORIPA.doc.getDataFilePath()).equals("")) {
+		if ((document.getDataFilePath()).equals("")) {
 			fileName = ORIPA.res.getString("DefaultFileName");
 		} else {
-			fileName = ORIPA.doc.getDataFileName();
+			fileName = document.getDataFileName();
 		}
 
 		setTitle(fileName + " - " + ORIPA.TITLE);
 	}
 
-	private String saveFile(String directory, String fileName,
-			FileFilterEx[] filters) {
+	@SafeVarargs
+	private final String saveFile(final String directory, String fileName,
+			final FileAccessSupportFilter<Doc>... filters) {
 
+		if (fileName.isEmpty()) {
+			fileName = "newFile.opx";
+		}
 		File givenFile = new File(directory, fileName);
 
-		return saveFile(givenFile.getPath(), filters);
-	}
+		var filePath = givenFile.getPath();
 
-	private String saveFile(String homePath, FileFilterEx[] filters) {
-		FileChooserFactory chooserFactory = new FileChooserFactory();
-		FileChooser chooser = chooserFactory.createChooser(homePath, filters);
-
-		String path = chooser.saveFile(this);
-		if (path != null) {
-			// if(path.endsWith(".opx")){
-			// ORIPA.doc.setDataFilePath(path);
-			// ORIPA.doc.clearChanged();
-			//
-			// updateMenu(path);
-			// }
-		} else {
-			path = homePath;
+		try {
+			final DocDAO dao = new DocDAO();
+			String savedPath = dao.saveUsingGUI(document, filePath, this, filters);
+			paintContext.creasePatternUndo().clearChanged();
+			return savedPath;
+		} catch (FileChooserCanceledException e) {
+			logger.info("File selection is canceled.");
+			return document.getDataFilePath();
 		}
-
-		return path;
-
 	}
 
-	public void exportFile(String ext) {
-		Doc document = ORIPA.doc;
-		CreasePattern creasePattern = document.getCreasePattern();
-		OrigamiModel origamiModel = document.getOrigamiModel();
+	public void saveFileWithModelCheck(final FileTypeKey type) {
 
-		boolean hasModel = origamiModel.hasModel();
+		try {
+			final DocDAO dao = new DocDAO();
+			dao.saveUsingGUIWithModelCheck(document, this, filterDB.getFilter(type));
 
-		OrigamiModelFactory modelFactory = new OrigamiModelFactory();
-		origamiModel = modelFactory.buildOrigami(creasePattern, document.getPaperSize(), true);
-		document.setOrigamiModel(origamiModel);
-		
-		if ("obj".equals(ext) == false) {
+		} catch (FileChooserCanceledException e) {
 
-		} else if (!hasModel && !origamiModel.isProbablyFoldable()) {
-			
-			JOptionPane.showConfirmDialog(null,
-					"Warning: Building a set of polygons from crease pattern "
-							+ "was failed.", "Warning",
-							JOptionPane.OK_OPTION, JOptionPane.WARNING_MESSAGE);
 		}
-
-
-		saveFile(null, new FileFilterEx[] { filterDB.getFilter(ext) });
 	}
 
-	private void buildMenuFile() {
+	private void buildFileMenu() {
 		menuFile.removeAll();
 
 		menuFile.add(menuItemClear);
@@ -560,7 +541,7 @@ public class MainFrame extends JFrame implements ActionListener,
 		menuFile.add(menuItemExit);
 	}
 
-	public void updateMenu(String filePath) {
+	public void updateMenu(final String filePath) {
 
 		if (filterDB.getLoadableFilterOf(filePath) == null) {
 			return;
@@ -568,123 +549,87 @@ public class MainFrame extends JFrame implements ActionListener,
 
 		fileHistory.useFile(filePath);
 
-		buildMenuFile();
+		buildFileMenu();
 	}
 
 	/**
 	 * if filePath is null, this method opens a dialog to select the target.
 	 * otherwise, it tries to read data from the path.
-	 * 
+	 *
 	 * @param filePath
 	 */
-	private void openFile(String filePath) {
-		ORIPA.modelFrame.setVisible(false);
-		ORIPA.renderFrame.setVisible(false);
+	private String openFile(final String filePath) {
+		ChildFrameManager.getManager().closeAllRecursively(this);
 
 		screenSetting.setGridVisible(false);
-		screenSetting.notifyObservers();
 
-		// ORIPA.mainFrame.uiPanel.dispGridCheckBox.setSelected(false);
+		DocDAO dao = new DocDAO();
 
-		String path = null;
-
-		if (filePath != null) {
-			path = loadFile(filePath);
-		} else {
-			FileChooserFactory factory = new FileChooserFactory();
-			FileChooser fileChooser = factory.createChooser(fileHistory
-					.getLastPath(), FilterDB.getInstance().getLoadables());
-
-			fileChooser.setFileFilter(FilterDB.getInstance().getFilter("opx"));
-
-			path = fileChooser.loadFile(this);
-
-		}
-
-		if (path == null) {
-			path = ORIPA.doc.getDataFilePath();
-		} else {
-			updateMenu(path);
-
-		}
-
-	}
-
-	/**
-	 * Do not call directly. Please use openFile().
-	 * 
-	 * @param filePath
-	 * @return
-	 */
-	private String loadFile(String filePath) {
-
-		FileFilterEx[] filters = FilterDB.getInstance().getLoadables();
-
-		File file = new File(filePath);
-
-		// find appropriate loader
-		boolean loaded = false;
-		for (FileFilterEx filter : filters) {
-			if (!filter.accept(file)){
-				continue;
+		try {
+			// we can't substitute a loaded object because
+			// the document object is referred by screen and UI panel as a
+			// Holder.
+			if (filePath != null) {
+				document.set(dao.load(filePath));
+			} else {
+				// DocFilterSelector selector = new DocFilterSelector();
+				document.set(dao.loadUsingGUI(
+						fileHistory.getLastPath(), filterDB.getLoadables(),
+						this));
 			}
-			if (file.isDirectory()) {
-				continue;
-			}
-
-			try {
-				loaded = filter.getLoadingAction().load(filePath);
-			} catch (FileVersionError e) {
-				JOptionPane.showMessageDialog(
-						this,
-						"This file is compatible with a new version. "
-								+ "Please obtain the latest version of ORIPA",
-						"Failed to load the file",
-						JOptionPane.ERROR_MESSAGE);
-			}
-			break;
-			
-		}
-
-		if (!loaded) {
+		} catch (FileVersionError | IOException e) {
+			showErrorDialog("Failed to load the file", e);
+		} catch (FileChooserCanceledException cancel) {
 			return null;
 		}
 
-		return filePath;
+		paintContext.clear(true);
+		paintContext.setCreasePattern(document.getCreasePattern());
+
+		paintContext.creasePatternUndo().clear();
+
+		return document.getDataFilePath();
+
 	}
 
-	private void saveIniFile() {
+	private void showErrorDialog(final String title, final Exception ex) {
+		JOptionPane.showMessageDialog(this,
+				ex.getMessage(), title, JOptionPane.ERROR_MESSAGE);
+
+	}
+
+	void saveIniFile() {
 		fileHistory.saveToFile(ORIPA.iniFilePath);
 	}
 
-	private void loadIniFile() {
+	void loadIniFile() {
 		fileHistory.loadFromFile(ORIPA.iniFilePath);
 	}
 
 	@Override
-	public void componentResized(ComponentEvent arg0) {
+	public void componentResized(final ComponentEvent arg0) {
 	}
 
 	@Override
-	public void componentMoved(ComponentEvent arg0) {
+	public void componentMoved(final ComponentEvent arg0) {
 	}
 
 	@Override
-	public void componentShown(ComponentEvent arg0) {
+	public void componentShown(final ComponentEvent arg0) {
 	}
 
 	@Override
-	public void componentHidden(ComponentEvent arg0) {
+	public void componentHidden(final ComponentEvent arg0) {
 	}
 
 	@Override
-	public void windowOpened(WindowEvent arg0) {
+	public void windowOpened(final WindowEvent arg0) {
 	}
 
 	@Override
-	public void windowClosing(WindowEvent arg0) {
+	public void windowClosing(final WindowEvent arg0) {
 
-		if (ORIPA.doc.isChanged()) {
+		if (paintContext.creasePatternUndo().changeExists()) {
 			// TODO: confirm saving edited opx
 			int selected = JOptionPane
 					.showConfirmDialog(
@@ -692,8 +637,11 @@ public class MainFrame extends JFrame implements ActionListener,
 							"The crease pattern has been modified. Would you like to save?",
 							"Comfirm to save", JOptionPane.YES_NO_OPTION);
 			if (selected == JOptionPane.YES_OPTION) {
+
+				document.setCreasePattern(paintContext.getCreasePattern());
+
 				String path = saveFile(fileHistory.getLastDirectory(),
-						ORIPA.doc.getDataFileName(), fileFilters);
+						document.getDataFileName(), filterDB.getSavables());
 				if (path == null) {
 
 				}
@@ -704,52 +652,30 @@ public class MainFrame extends JFrame implements ActionListener,
 	}
 
 	@Override
-	public void windowClosed(WindowEvent arg0) {
+	public void windowClosed(final WindowEvent arg0) {
 	}
 
 	@Override
-	public void windowIconified(WindowEvent arg0) {
+	public void windowIconified(final WindowEvent arg0) {
 	}
 
 	@Override
-	public void windowDeiconified(WindowEvent arg0) {
+	public void windowDeiconified(final WindowEvent arg0) {
 	}
 
 	@Override
-	public void windowActivated(WindowEvent arg0) {
+	public void windowActivated(final WindowEvent arg0) {
 	}
 
 	@Override
-	public void windowDeactivated(WindowEvent arg0) {
+	public void windowDeactivated(final WindowEvent arg0) {
 	}
 
-	// @Override
-	// public void keyTyped(KeyEvent e) {
-	// if(e.isControlDown()){
-	// screenUpdater.updateScreen();
-	// }
-	// }
-	//
-	// @Override
-	// public void keyPressed(KeyEvent e) {
-	// if(e.isControlDown()){
-	// screenUpdater.updateScreen();
-	// }
-	// }
-	//
-	// @Override
-	// public void keyReleased(KeyEvent e) {
-	// if(e.isControlDown()){
-	// screenUpdater.updateScreen();
-	// }
-	//
-	// }
-
-	@Override
-	public void update(Observable o, Object arg) {
-		if (o.toString() == setting.getName()) {
-			hintLabel.setText("    " + setting.getHint());
+	private void addPropertyChangeListenersToSetting() {
+		setting.addPropertyChangeListener(MainFrameSettingDB.HINT, e -> {
+			hintLabel.setText("    " + (String) e.getNewValue());
 			hintLabel.repaint();
-		}
+		});
+
 	}
 }

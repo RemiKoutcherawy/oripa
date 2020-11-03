@@ -1,122 +1,53 @@
 package oripa.appstate;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import oripa.ORIPA;
-import oripa.appstate.ApplicationState;
-import oripa.appstate.StateManager;
-import oripa.bind.EditOutlineActionWrapper;
-import oripa.bind.state.PaintBoundStateFactory;
-import oripa.doc.Doc;
-import oripa.paint.EditMode;
-import oripa.paint.addvertex.AddVertexAction;
-import oripa.paint.bisector.AngleBisectorAction;
-import oripa.paint.byvalue.LineByValueAction;
-import oripa.paint.core.PaintConfig;
-import oripa.paint.deleteline.DeleteLineAction;
-import oripa.paint.deletevertex.DeleteVertexAction;
-import oripa.paint.line.TwoPointLineAction;
-import oripa.paint.linetype.ChangeLineTypeAction;
-import oripa.paint.mirror.MirrorCopyAction;
-import oripa.paint.pbisec.TwoPointBisectorAction;
-import oripa.paint.segment.TwoPointSegmentAction;
-import oripa.paint.selectline.SelectLineAction;
-import oripa.resource.StringID;
+import oripa.bind.state.PaintBoundState;
+import oripa.domain.paint.EditMode;
 
 public class StateManagerTest {
 
 	@Test
-	public void test() {
-		
+	public void testByScenario() {
 		StateManager manager = StateManager.getInstance();
-		PaintBoundStateFactory stateFactory = new PaintBoundStateFactory();
-		
-		ORIPA.doc = new Doc();
-		
-		manager.push(stateFactory.create(
-				null, StringID.DIRECT_V_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), TwoPointSegmentAction.class);
-		
-		manager.push(stateFactory.create(
-				null, StringID.SELECT_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), SelectLineAction.class);
 
-		ApplicationState<EditMode> popped = manager.popLastInputCommand();
-		popped.performActions(null);
-		
-		assertEquals(PaintConfig.getMouseAction().getClass(), TwoPointSegmentAction.class);
+		var inputState = createMockedState(EditMode.INPUT);
+		manager.push(inputState);
 
-		
-		
-		manager.push(stateFactory.create(
-				null, StringID.ADD_VERTEX_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), AddVertexAction.class);
+		var addVertexState = createMockedState(EditMode.VERTEX);
+		manager.push(addVertexState);
 
-		manager.push(stateFactory.create(
-				null, StringID.BISECTOR_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), AngleBisectorAction.class);
+		var deleteLineState = createMockedState(EditMode.DELETE_LINE);
+		manager.push(deleteLineState);
 
-		manager.push(stateFactory.create(
-				null, StringID.BY_VALUE_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), LineByValueAction.class);
+		assertEquals(deleteLineState, manager.getCurrent());
+		assertEquals(addVertexState, manager.pop());
 
-		manager.push(stateFactory.create(
-				null, StringID.CHANGE_LINE_TYPE_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), ChangeLineTypeAction.class);
+		manager.push(deleteLineState);
 
-//		PaintContext context = PaintContext.getInstance();
-//		OriLine line = new OriLine(0, 0, 10, 10, 1);
-//		line.selected = true;
-//		context.pushLine(line);
-//		manager.push(stateFactory.create(
-//				null, StringID.COPY_PASTE_ID));
-//		manager.getCurrent().performActions(null);
-//		assertEquals(Globals.getMouseAction().getClass(), CopyAndPasteActionWrapper.class);
-//
-//		manager.push(stateFactory.create(
-//				null, StringID.CUT_PASTE_ID));
-//		manager.getCurrent().performActions(null);
-//		assertEquals(Globals.getMouseAction().getClass(), CopyAndPasteActionWrapper.class);
-		
-		manager.push(stateFactory.create(
-				null, StringID.DELETE_LINE_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), DeleteLineAction.class);
-		
-		manager.push(stateFactory.create(
-				null, StringID.DELETE_VERTEX_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), DeleteVertexAction.class);
-		
-		manager.push(stateFactory.create(
-				null, StringID.EDIT_CONTOUR_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), EditOutlineActionWrapper.class);
-		
-		manager.push(stateFactory.create(
-				null, StringID.MIRROR_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), MirrorCopyAction.class);
-		
-		manager.push(stateFactory.create(
-				null, StringID.ON_V_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), TwoPointLineAction.class);
-		
-		manager.push(stateFactory.create(
-				null, StringID.PERPENDICULAR_BISECTOR_ID));
-		manager.getCurrent().performActions(null);
-		assertEquals(PaintConfig.getMouseAction().getClass(), TwoPointBisectorAction.class);
-		
-		
+		assertEquals(inputState, manager.popLastInputCommand());
+
+		// copy(cut) state won't keep as previous state
+		var selectState = createMockedState(EditMode.SELECT);
+		manager.push(selectState);
+
+		var copyState = createMockedState(EditMode.COPY);
+		manager.push(copyState);
+		assertEquals(copyState, manager.getCurrent());
+
+		manager.push(deleteLineState);
+
+		assertEquals(selectState, manager.pop());
 	}
 
+	private PaintBoundState createMockedState(final EditMode mode) {
+		var state = mock(PaintBoundState.class);
+		when(state.getGroup()).thenReturn(mode);
+		return state;
+
+	}
 }
